@@ -5,51 +5,51 @@ from datamodel import Listing, OrderDepth, Trade, TradingState
 timestamp = 1000
 
 listings = {
-	"PRODUCT1": Listing(
-		symbol="PRODUCT1", 
-		product="PRODUCT1", 
+	"PEARLS": Listing(
+		symbol="PEARLS", 
+		product="PEARLS", 
 		denomination= "SEASHELLS"
 	),
-	"PRODUCT2": Listing(
-		symbol="PRODUCT2", 
-		product="PRODUCT2", 
+	"BANANAS": Listing(
+		symbol="BANANAS", 
+		product="BANANAS", 
 		denomination= "SEASHELLS"
 	),
 }
 
 order_depths = {
-	"PRODUCT1": OrderDepth(
-		buy_orders={10: 7, 9: 5},
-		sell_orders={11: -4, 12: -8}
+	"PEARLS": OrderDepth(
+		buy_orders={9100: 7, 9000: 5},
+		sell_orders={9900: -4, 11000: -8}
 	),
-	"PRODUCT2": OrderDepth(
-		buy_orders={142: 3, 141: 5},
-		sell_orders={144: -5, 145: -8}
+	"BANANAS": OrderDepth(
+		buy_orders={4801: 3, 4700: 5},
+		sell_orders={4940: -5, 4950: -8}
 	),	
 }
 
 own_trades = {
-	"PRODUCT1": [],
-	"PRODUCT2": []
+	"PEARLS": [],
+	"BANANAS": []
 }
 
 market_trades = {
-	"PRODUCT1": [
+	"PEARLS": [
 		Trade(
-			symbol="PRODUCT1",
-			price=11,
+			symbol="PEARLS",
+			price=10000,
 			quantity=4,
 			buyer="",
 			seller="",
 			timestamp=900
 		)
 	],
-	"PRODUCT2": []
+	"BANANAS": []
 }
 
 position = {
-	"PRODUCT1": 3,
-	"PRODUCT2": -5
+	"PEARLS": 3,
+	"BANANAS": -5
 }
 
 observations = {}

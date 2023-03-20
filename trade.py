@@ -16,56 +16,84 @@ class Trader:
         # Initialize the method output dict as an empty dict
         result = {}
 
+        # set position limits and estimate fair values
+        positionLimits = {'PEARLS': 20, 'BANANAS': 20}
+        productValuations = {'PEARLS': 10000, 'BANANAS': 4800}
+
         # Iterate over all the keys (the available products) contained in the order depths
         for product in state.order_depths.keys():
 
-            # Check if the current product is the 'PRODUCT1' product, only then run the order logic
-            if product == 'PRODUCT1':
+            # Retrieve the Order Depth containing all the market BUY and SELL orders for PEARLS
+            order_depth: OrderDepth = state.order_depths[product]
 
-                # Retrieve the Order Depth containing all the market BUY and SELL orders for PEARLS
-                order_depth: OrderDepth = state.order_depths[product]
+            # Initialize the list of Orders to be sent as an empty list
+            orders: list[Order] = []
 
-                # Initialize the list of Orders to be sent as an empty list
-                orders: list[Order] = []
+            # Define a fair value
+            acceptable_price = productValuations[product]
 
-                # Define a fair value for the PEARLS.
-                # Note that this value of 1 is just a dummy value, you should likely change it!
-                acceptable_price = 13
+            # get current position on the product
+            currentPosition = state.position[product]
 
-                # If statement checks if there are any SELL orders in the PEARLS market
-                if len(order_depth.sell_orders) > 0:
+            # If statement checks if there are any SELL orders in the market
+            if len(order_depth.sell_orders) > 0:
 
-                    # Sort all the available sell orders by their price,
-                    # and select only the sell order with the lowest price
-                    best_ask = min(order_depth.sell_orders.keys())
-                    best_ask_volume = order_depth.sell_orders[best_ask]
+                # Sort all the available sell orders by their price,
+                # and select only the sell order with the lowest price
+                best_ask = min(order_depth.sell_orders.keys())
+                best_ask_volume = -1*order_depth.sell_orders[best_ask]
 
-                    # Check if the lowest ask (sell order) is lower than the above defined fair value
-                    if best_ask < acceptable_price:
+                # Check if the lowest ask (sell order) is lower than the above defined fair value
+                if best_ask < acceptable_price:
 
-                        # In case the lowest ask is lower than our fair value,
-                        # This presents an opportunity for us to buy cheaply
-                        # The code below therefore sends a BUY order at the price level of the ask,
-                        # with the same quantity
-                        # We expect this order to trade with the sell order
-                        print("BUY", str(-best_ask_volume) + "x", best_ask)
-                        orders.append(Order(product, best_ask, -best_ask_volume))
+                    # decide how much to buy
+                    quantityToBuy = decideHowMuchToBuy(currentPosition, best_ask_volume, positionLimits[product])
+                    # update current position
+                    currentPosition += quantityToBuy
+                    
+                    # We expect this order to trade with the sell order
+                    print(product, "BUY", str(quantityToBuy) + "x", best_ask)
+                    orders.append(Order(product, best_ask, quantityToBuy))
 
-                # The below code block is similar to the one above,
-                # the difference is that it finds the highest bid (buy order)
-                # If the price of the order is higher than the fair value
-                # This is an opportunity to sell at a premium
-                if len(order_depth.buy_orders) != 0:
-                    best_bid = max(order_depth.buy_orders.keys())
-                    best_bid_volume = order_depth.buy_orders[best_bid]
-                    if best_bid > acceptable_price:
-                        print("SELL", str(best_bid_volume) + "x", best_bid)
-                        orders.append(Order(product, best_bid, -best_bid_volume))
+            # The below code block is similar to the one above,
+            # the difference is that it finds the highest bid (buy order)
+            # If the price of the order is higher than the fair value
+            # This is an opportunity to sell at a premium
+            if len(order_depth.buy_orders) != 0:
+                best_bid = max(order_depth.buy_orders.keys())
+                best_bid_volume = order_depth.buy_orders[best_bid]
+                if best_bid > acceptable_price:
+                    if currentPosition - best_bid_volume > -positionLimits[product]:
+                        # safe to sell all available at this price
+                        quantityToSell = best_bid_volume
+                    else:
+                        quantityToSell = positionLimits[product] + currentPosition
 
-                # Add all the above orders to the result dict
-                result[product] = orders
+                    print(product, "SELL", str(quantityToSell) + "x", best_bid)
+                    orders.append(Order(product, best_bid, -quantityToSell))
 
-                # Return the dict of orders
-                # These possibly contain buy or sell orders for PEARLS
-                # Depending on the logic above
+            # Add all the above orders to the result dict
+            result[product] = orders
+
+            # Return the dict of orders
+            # These possibly contain buy or sell orders depending on the logic above
+        # print for debugging purposes 
+        print("Printing output: ")
+        print(result)
+
         return result
+
+def decideHowMuchToBuy(currentPos, maxPossibleVolume, positionLimit):
+    """ Decide how much of a product to buy, given that there is at least some available at a fair price
+    Takes as input the current position on the product in question, the position limit for that product and the
+    max available to buy at the one specific price point
+    Returns how much can be bought at that price"""
+    if currentPos + maxPossibleVolume <= positionLimit:
+        # can buy all available at that price without reaching position limit
+        quantityToBuy = maxPossibleVolume
+    else:
+        # buy just enough to reach the position limit
+        # *** might not be a great strategy to do this every time...
+        quantityToBuy = positionLimit - currentPos
+    # update current position
+    return quantityToBuy
