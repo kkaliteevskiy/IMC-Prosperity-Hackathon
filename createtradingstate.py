@@ -20,7 +20,7 @@ listings = {
 order_depths = {
 	"PEARLS": OrderDepth(
 		buy_orders={9100: 7, 9000: 5},
-		sell_orders={9900: -4, 11000: -8}
+		sell_orders={9900: -4, 9970: -8, 11000: -5}
 	),
 	"BANANAS": OrderDepth(
 		buy_orders={4801: 3, 4700: 5},

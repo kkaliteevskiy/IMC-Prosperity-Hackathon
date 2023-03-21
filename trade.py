@@ -32,8 +32,9 @@ class Trader:
             # Define a fair value
             acceptable_price = productValuations[product]
 
-            # get current position on the product
+            # get current position and position limit on the product
             currentPosition = state.position[product]
+            positionLimit = positionLimits[product]
 
             # If statement checks if there are any SELL orders in the market
             if len(order_depth.sell_orders) > 0:
@@ -43,17 +44,29 @@ class Trader:
                 best_ask = min(order_depth.sell_orders.keys())
                 best_ask_volume = -1*order_depth.sell_orders[best_ask]
 
+                i = 0 # counter for selecting (i+1)th lowest available price
+
                 # Check if the lowest ask (sell order) is lower than the above defined fair value
-                if best_ask < acceptable_price:
+                while (best_ask < acceptable_price and currentPosition < positionLimit):
 
                     # decide how much to buy
-                    quantityToBuy = decideHowMuchToBuy(currentPosition, best_ask_volume, positionLimits[product])
+                    quantityToBuy = decideHowMuchToBuy(currentPosition, best_ask_volume, positionLimit)
                     # update current position
                     currentPosition += quantityToBuy
                     
                     # We expect this order to trade with the sell order
                     print(product, "BUY", str(quantityToBuy) + "x", best_ask)
                     orders.append(Order(product, best_ask, quantityToBuy))
+
+                    # update to next best available price if relevant
+                    i += 1
+                    if (i < len(order_depth.sell_orders.keys())):
+                        best_ask = sorted(order_depth.sell_orders.keys())[i]
+                        best_ask_volume = -1*order_depth.sell_orders[best_ask]
+                    else:
+                        # stop checking prices - break out of while loop
+                        break
+
 
             # The below code block is similar to the one above,
             # the difference is that it finds the highest bid (buy order)
@@ -83,17 +96,17 @@ class Trader:
 
         return result
 
-def decideHowMuchToBuy(currentPos, maxPossibleVolume, positionLimit):
+def decideHowMuchToBuy(currentPos, maxPossibleVolume, posLimit):
     """ Decide how much of a product to buy, given that there is at least some available at a fair price
     Takes as input the current position on the product in question, the position limit for that product and the
     max available to buy at the one specific price point
     Returns how much can be bought at that price"""
-    if currentPos + maxPossibleVolume <= positionLimit:
+    if currentPos + maxPossibleVolume <= posLimit:
         # can buy all available at that price without reaching position limit
         quantityToBuy = maxPossibleVolume
     else:
         # buy just enough to reach the position limit
         # *** might not be a great strategy to do this every time...
-        quantityToBuy = positionLimit - currentPos
+        quantityToBuy = posLimit - currentPos
     # update current position
     return quantityToBuy
