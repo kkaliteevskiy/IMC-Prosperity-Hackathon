@@ -18,7 +18,7 @@ class Trader:
 
         # set position limits and estimate fair values
         positionLimits = {"PEARLS": 20, "BANANAS": 20}
-        productValuations = {"PEARLS": 10000, "BANANAS": 4800}
+        productValuations = {"PEARLS": 10000, "BANANAS": 4890}
 
         # Iterate over all the keys (the available products) contained in the order depths
         for product in state.order_depths.keys():
