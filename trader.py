@@ -35,7 +35,7 @@ class Trader:
 
                 # Define a fair value for the PEARLS.
                 # Note that this value of 1 is just a dummy value, you should likely change it!
-                acceptable_price = 1
+                acceptable_price = 10000
 
                 # If statement checks if there are any SELL orders in the PEARLS market
                 if len(order_depth.sell_orders) > 0:
