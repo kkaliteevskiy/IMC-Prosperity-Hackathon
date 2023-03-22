@@ -16,9 +16,12 @@ class Trader:
         # Initialize the method output dict as an empty dict
         result = {}
 
-        # set position limits and estimate fair values
-        positionLimits = {"PEARLS": 20, "BANANAS": 20}
-        productValuations = {"PEARLS": 10000, "BANANAS": 4890}
+        # set position limits
+        positionLimits = {"PEARLS": 20, "BANANAS": 20, "COCONUTS": 600, "PINA_COLADAS": 300}
+
+        # estimate fair values
+        productBuyValuations = {"PEARLS": 10000, "BANANAS": 4880, "COCONUTS": 7800, "PINA_COLADAS": 14800}
+        productSellValuations = {"PEARLS": 10000, "BANANAS": 4910, "COCONUTS": 8100, "PINA_COLADAS": 15200}
 
         # Iterate over all the keys (the available products) contained in the order depths
         for product in state.order_depths.keys():
@@ -30,7 +33,8 @@ class Trader:
             orders: list[Order] = []
 
             # Define a fair value
-            acceptable_price = productValuations[product]
+            acceptable_buy_price = productBuyValuations[product]
+            acceptable_sell_price = productSellValuations[product]
 
             # get current position and position limit on the product
             currentPosition = state.position.get(product, 0) # set to 0 if nothing returned
@@ -47,7 +51,7 @@ class Trader:
                 i = 0 # counter for selecting (i+1)th lowest available price
 
                 # Check if the lowest ask (sell order) is lower than the above defined fair value
-                while (best_ask < acceptable_price and currentPosition < positionLimit):
+                while (best_ask < acceptable_buy_price and currentPosition < positionLimit):
 
                     # decide how much to buy
                     quantityToBuy = decideHowMuchToBuy(currentPosition, best_ask_volume, positionLimit)
@@ -75,7 +79,7 @@ class Trader:
             if len(order_depth.buy_orders) != 0:
                 best_bid = max(order_depth.buy_orders.keys())
                 best_bid_volume = order_depth.buy_orders[best_bid]
-                if best_bid > acceptable_price:
+                if best_bid > acceptable_sell_price:
                     if currentPosition - best_bid_volume > -positionLimits[product]:
                         # safe to sell all available at this price
                         quantityToSell = best_bid_volume
@@ -88,12 +92,8 @@ class Trader:
             # Add all the above orders to the result dict
             result[product] = orders
 
-            # Return the dict of orders
-            # These possibly contain buy or sell orders depending on the logic above
-        # print for debugging purposes 
-        print("Printing output: ")
-        print(result)
-
+        # Return the dict of orders
+        # These possibly contain buy or sell orders depending on the logic above
         return result
 
 def decideHowMuchToBuy(currentPos, maxPossibleVolume, posLimit):
