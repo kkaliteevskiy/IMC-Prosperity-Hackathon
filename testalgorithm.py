@@ -93,4 +93,4 @@ def simulate(round: int, day: int, trader):
 
 from trade import Trader
 if __name__ == '__main__':
-    simulate(2, 0, Trader())
+    simulate(round=2, day=1, trader=Trader())
