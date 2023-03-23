@@ -8,49 +8,10 @@ from datamodel import OrderDepth, TradingState, Order
 import numpy as np
 
 class Trader:
-
-    def __init__(self):
-        self.past_100_valuations = {"PEARLS": [10000], "BANANAS": [5000], "PINA_COLADAS": [15000], "COCONUTS": [8000]}
-        self.rolling_average_trading_price = {"PEARLS": None, "BANANAS": None, "PINA_COLADAS": None, "COCONUTS": None}
-
-    def get_current_market_prices(self, market_trades):
-        """Looks at the market_tardes - Dict[Symbol, List[Trade]] (trades that have been made by other market participants) 
-        and calculates the current market proce of products"""
-
-        predicted_prices = {}
-
-        for product in market_trades.keys():
-
-            transaction_totals = 0
-            quantity_traded = 0
-            
-            for trade in market_trades[product]:
-                transaction_totals += trade.price * abs(trade.quantity)
-                quantity_traded += abs(trade.quantity)
-
-            predicted_prices[product] = transaction_totals/quantity_traded
-
-        return predicted_prices
-
-    def get_rolling_average_valuations(self, market_trades):
-
-        currentValuations = self.get_current_market_prices(market_trades)
-        rollingValuations = {}# Dict[Symbol, price]
         
-        for product in market_trades.keys():
+    past_100_valuations = {"PEARLS": [10000], "BANANAS": [5000], "PINA_COLADAS": [15000], "COCONUTS": [8000]}
+    rolling_average_trading_price = {"PEARLS": 10000, "BANANAS": 5000, "PINA_COLADAS": 15000, "COCONUTS": 8000}
 
-            if(len(self.past_100_valuations[product]) < 100):
-                self.past_100_valuations[product].append(currentValuations[product])
-
-            else:
-                self.past_100_valuations[product] = np.roll(self.past_100_valuations[product], -1)# shift the array
-                self.past_100_valuations[product][-1] = currentValuations[product] #set final valuation to the current valuation
-
-                rollingValuations[product] = self.past_100_valuations[product].mean()
-
-            print('product valuations :', rollingValuations)
-            
-        return currentValuations
 
     def run(self, state: TradingState) -> Dict[str, List[Order]]:
         """
@@ -61,12 +22,24 @@ class Trader:
         result = {}
 
         # set position limits and estimate fair values
-        positionLimits = {"PEARLS": 20, "BANANAS": 20, "PINA_COLADAS": 20, "COCONUTS": 20}
+        positionLimits = {"PEARLS": 20, "BANANAS": 20, "PINA_COLADAS": 600, "COCONUTS": 300}
         productValuations = {"PEARLS": 10000, "BANANAS": 4890, "PINA_COLADAS": 15000, "COCONUTS": 8000}
 
-        # get current market prices
-        # productValuations = self.get_current_market_prices(state.market_trades)
-        productValuations = self.get_rolling_average_valuations(state.market_trades)
+        currentValuations = get_current_market_prices(state.market_trades)
+
+        for product in currentValuations.keys():#define rolling average for each product
+
+            if(len(Trader.past_100_valuations[product]) < 10):#if less than 100 trades took place
+                Trader.past_100_valuations[product].append(currentValuations[product])
+            else:
+                Trader.past_100_valuations[product] = np.roll(Trader.past_100_valuations[product], -1)#rotate and reassign 
+                Trader.past_100_valuations[product][-1] = currentValuations[product] 
+            
+            mean_price = np.mean(Trader.past_100_valuations[product])
+            Trader.rolling_average_trading_price[product] = mean_price
+            print(product, ' mean price : ', mean_price)
+
+
 
 
         # Iterate over all the keys (the available products) contained in the order depths
@@ -79,7 +52,7 @@ class Trader:
             orders: list[Order] = []
 
             # Define a fair value
-            acceptable_price = productValuations[product]
+            acceptable_price = Trader.rolling_average_trading_price[product]
 
             # get current position and position limit on the product
             currentPosition = state.position.get(product, 0) # set to 0 if nothing returned
@@ -104,7 +77,7 @@ class Trader:
                     currentPosition += quantityToBuy
                     
                     # We expect this order to trade with the sell order
-                    print(product, "BUY", str(quantityToBuy) + "x", best_ask)
+                    #print(product, "BUY", str(quantityToBuy) + "x", best_ask)
                     orders.append(Order(product, best_ask, quantityToBuy))
 
                     # update to next best available price if relevant
@@ -131,7 +104,7 @@ class Trader:
                     else:
                         quantityToSell = positionLimits[product] + currentPosition
 
-                    print(product, "SELL", str(quantityToSell) + "x", best_bid)
+                    # print(product, "SELL", str(quantityToSell) + "x", best_bid)
                     orders.append(Order(product, best_bid, -quantityToSell))
 
             # Add all the above orders to the result dict
@@ -162,7 +135,45 @@ class Trader:
         return quantityToBuy
 
     
-             
+def get_current_market_prices(market_trades):
+        """Looks at the market_tardes - Dict[Symbol, List[Trade]] (trades that have been made by other market participants) 
+        and calculates the current market proce of products"""
+
+        predicted_prices = {}
+
+        for product in market_trades.keys():
+
+            transaction_totals = 0
+            quantity_traded = 0
             
+            for trade in market_trades[product]:
+                transaction_totals += trade.price * abs(trade.quantity)
+                quantity_traded += abs(trade.quantity)
+
+            try:
+                predicted_prices[product] = transaction_totals/quantity_traded
+            except:
+                predicted_prices[product] = Trader.past_100_valuations[product][0]#default value
+
+        return predicted_prices
             
+def get_rolling_average_valuations(self, market_trades):
+
+        currentValuations = self.get_current_market_prices(market_trades)
+        rollingValuations = {}# Dict[Symbol, price]
+        
+        for product in market_trades.keys():
+
+            if(len(self.past_100_valuations[product]) < 100):
+                self.past_100_valuations[product].append(currentValuations[product])
+
+            else:
+                self.past_100_valuations[product] = np.roll(self.past_100_valuations[product], -1)# shift the array
+                self.past_100_valuations[product][-1] = currentValuations[product] #set final valuation to the current valuation
+
+                rollingValuations[product] = self.past_100_valuations[product].mean()
+
+            print('product valuations :', rollingValuations)
+            
+        return currentValuations
             
