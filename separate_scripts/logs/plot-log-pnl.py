@@ -5,7 +5,7 @@ import pandas as pd
 import plotly.express as px  
 
 # ***change location of file here***
-filename = 'log1.txt'
+filename = 'log2.txt'
 df =  pd.read_csv(f'separate_scripts\\logs\\{filename}', delimiter = ';') # Read csv file into dataframe
 
 # plot price history

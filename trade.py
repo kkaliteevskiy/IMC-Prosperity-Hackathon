@@ -11,6 +11,9 @@ import numpy as np
 lastMarketValues = {"PEARLS": 10000, "BANANAS": 4910, "COCONUTS": 8000, "PINA_COLADAS": 15000}
 
 class Trader:
+    
+    past_100_valuations = {"PEARLS": [10000], "BANANAS": [5000], "PINA_COLADAS": [15000], "COCONUTS": [8000]}
+    rolling_average_trading_price = {"PEARLS": 10000, "BANANAS": 5000, "PINA_COLADAS": 15000, "COCONUTS": 8000}
 
     def run(self, state: TradingState) -> Dict[str, List[Order]]:
         """
@@ -26,8 +29,22 @@ class Trader:
 
         # set safety margins for each product - a measure of how confident we can be in the valuation
         # smaller margin = more confident in valuation
-        safetyMargins = {"PEARLS": 0, "BANANAS": 5, "COCONUTS": 10, "PINA_COLADAS": 10} 
+        safetyMargins = {"PEARLS": 0, "BANANAS": 0, "COCONUTS": 0, "PINA_COLADAS": 0} 
+        
+        currentValuations = getCurrentMarketPrices(state.market_trades)
+        
+        for product in currentValuations.keys():#define rolling average for each product
 
+            if(len(Trader.past_100_valuations[product]) < 10):#if less than 100 trades took place
+                Trader.past_100_valuations[product].append(currentValuations[product])
+            else:
+                Trader.past_100_valuations[product] = np.roll(Trader.past_100_valuations[product], -1)#rotate and reassign 
+                Trader.past_100_valuations[product][-1] = currentValuations[product] 
+            
+            mean_price = np.mean(Trader.past_100_valuations[product])
+            Trader.rolling_average_trading_price[product] = mean_price
+            print(product, ' mean price : ', mean_price)
+        
         # Iterate over all the keys (the available products) contained in the order depths
         for product in state.order_depths.keys():
 
@@ -38,8 +55,8 @@ class Trader:
             orders: list[Order] = []
 
             # estimate a fair value
-            acceptable_buy_price = lastMarketValues[product] - safetyMargins[product]
-            acceptable_sell_price = lastMarketValues[product] + safetyMargins[product]
+            acceptable_buy_price = Trader.rolling_average_trading_price[product] - safetyMargins[product]
+            acceptable_sell_price = Trader.rolling_average_trading_price[product] + safetyMargins[product]
 
             # get current position and position limit on the product
             currentPosition = state.position.get(product, 0) # set to 0 if nothing returned
@@ -57,13 +74,18 @@ class Trader:
                 if best_ask < acceptable_buy_price:
 
                     # decide how much to buy
-                    quantityToBuy = decideHowMuchToBuy(currentPosition, best_ask_volume, positionLimit, best_ask, acceptable_buy_price)
-                    # update current position
-                    currentPosition += quantityToBuy
+                    if product == "PEARLS":
+                        quantityToBuy = decideHowMuchCanBeBought(currentPosition, best_ask_volume, positionLimit)
+                    else:
+                        quantityToBuy = decideHowMuchToBuy(currentPosition, best_ask_volume, positionLimit, best_ask, acceptable_buy_price)
                     
-                    # We expect this order to trade with the sell order
-                    print(product, "BUY", str(quantityToBuy) + "x", best_ask)
-                    orders.append(Order(product, best_ask, quantityToBuy))
+                    if quantityToBuy != 0:
+                        # update current position
+                        currentPosition += quantityToBuy
+                    
+                        # We expect this order to trade with the sell order
+                        print(product, "BUY", str(quantityToBuy) + "x", best_ask)
+                        orders.append(Order(product, best_ask, quantityToBuy))
 
 
             # The below code block looks for opportunities to sell at a premium
@@ -71,19 +93,23 @@ class Trader:
                 best_bid = max(order_depth.buy_orders.keys())
                 best_bid_volume = order_depth.buy_orders[best_bid]
                 if best_bid > acceptable_sell_price:
-                    quantityToSell = decideHowMuchToSell(currentPosition, best_bid_volume, positionLimit, best_bid, acceptable_sell_price)
+                    if product == "PEARLS":
+                        quantityToSell = decideHowMuchCanBeSold(currentPosition, best_bid_volume, positionLimit)
+                    else:
+                        quantityToSell = decideHowMuchToSell(currentPosition, best_bid_volume, positionLimit, best_bid, acceptable_sell_price)
 
-                    # update current position
-                    currentPosition -= quantityToSell
+                    if quantityToSell != 0:
+                        # update current position
+                        currentPosition -= quantityToSell
 
-                    print(product, "SELL", str(quantityToSell) + "x", best_bid)
-                    orders.append(Order(product, best_bid, -quantityToSell))
+                        print(product, "SELL", str(quantityToSell) + "x", best_bid)
+                        orders.append(Order(product, best_bid, -quantityToSell))
 
             # Add all the above orders to the result dict
             result[product] = orders
 
         # update market values
-        lastMarketValues = updateProductValuations(state.market_trades, lastMarketValues)
+        lastMarketValues = updateProductValuations(state.order_depths, lastMarketValues)
 
         # Return the dict of orders
         # These possibly contain buy or sell orders depending on the logic above
@@ -103,7 +129,6 @@ def decideHowMuchCanBeBought(currentPos, maxPossibleVolume, posLimit):
     else:
         # buy just enough to reach the position limit
         quantityToBuy = posLimit - currentPos
-    print("buy pos", currentPos, "max", quantityToBuy, "limit", posLimit, "maxPoss", maxPossibleVolume)
     return quantityToBuy
 
 def decideHowMuchToBuy(currentPos, maxPossibleVolume, posLimit, buyingPrice, estimatedValue):
@@ -127,7 +152,6 @@ def decideHowMuchCanBeSold(currentPos, maxPossibleVolume, posLimit):
         quantityToSell = maxPossibleVolume
     else:
         quantityToSell = posLimit + currentPos
-    print("pos", currentPos, "max", quantityToSell)
     return quantityToSell
 
 def decideHowMuchToSell(currentPos, maxPossibleVolume, posLimit, sellingPrice, estimatedValue):
@@ -137,13 +161,45 @@ def decideHowMuchToSell(currentPos, maxPossibleVolume, posLimit, sellingPrice, e
     #activation = sigmoid(5*(weight+0.3))
     activation = sigmoid(weight) # need slightly different activation as weight is different
     quantityToSell = round(maxAmount * activation)
-    print(".......",weight, activation, maxAmount*activation)
     return quantityToSell
 
 
-def getProductValuations(market_trades):
-    """Looks at the market_trades: Dict[Symbol, List[Trade]] (trades that have been made by other market participants) 
-    and calculates the current market price of products"""
+def getProductValuations(order_depths):
+    """Looks at the order_depths and calculates the current market price of products"""
+
+    predicted_prices = {}
+
+    for product in order_depths.keys():
+
+        best_ask = min(order_depths[product].sell_orders.keys())
+        best_bid = max(order_depths[product].buy_orders.keys())
+        mid_price = (best_ask + best_bid) / 2
+        try:
+            predicted_prices[product] = mid_price
+        except Exception:
+            predicted_prices[product] = -1 # throw a nonsense price which can be picked up easily
+
+    return predicted_prices
+
+def updateProductValuations(orderDepths, prevPrices):
+    """Attempt to get new estimates for product valuations
+    Update prevPrices: Dict[Symbol, int] iff getProductValuations() returns a logical estimate"""
+    predictedPrices = getProductValuations(orderDepths)
+    for prod in predictedPrices.keys():
+        if predictedPrices[prod] != -1:
+            # getProductValuations did not throw an error
+            prevPrices[prod] = predictedPrices[prod]
+    return prevPrices
+
+def incrementAllDictValuesByX(myDict: Dict, x: int):
+    newDict = {}
+    for key in myDict.keys():
+        newDict[key] = myDict[key] + x
+    return newDict
+
+def getCurrentMarketPrices(market_trades):
+    """Looks at the market_tardes - Dict[Symbol, List[Trade]] (trades that have been made by other market participants) 
+    and calculates the current market proce of products"""
 
     predicted_prices = {}
 
@@ -158,23 +214,7 @@ def getProductValuations(market_trades):
 
         try:
             predicted_prices[product] = transaction_totals/quantity_traded
-        except ZeroDivisionError:
-            predicted_prices[product] = -1 # throw a nonsense price which can be picked up easily
+        except:
+            predicted_prices[product] = Trader.past_100_valuations[product][0]#default value
 
     return predicted_prices
-
-def updateProductValuations(marketTrades, prevPrices):
-    """Attempt to get new estimates for product valuations
-    Update prevPrices: Dict[Symbol, int] iff getProductValuations() returns a logical estimate"""
-    predictedPrices = getProductValuations(marketTrades)
-    for prod in predictedPrices.keys():
-        if predictedPrices[prod] != -1:
-            # getProductValuations did not throw a ZeroDivisionError
-            prevPrices[prod] = predictedPrices[prod]
-    return prevPrices
-
-def incrementAllDictValuesByX(myDict: Dict, x: int):
-    newDict = {}
-    for key in myDict.keys():
-        newDict[key] = myDict[key] + x
-    return newDict
