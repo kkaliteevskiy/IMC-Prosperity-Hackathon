@@ -7,9 +7,6 @@ from typing import Dict, List
 from datamodel import OrderDepth, TradingState, Order
 import numpy as np
 
-# initialise market values (estimate)
-lastMarketValues = {"PEARLS": 10000, "BANANAS": 4910, "COCONUTS": 8000, "PINA_COLADAS": 15000}
-
 class Trader:
     
     past_100_valuations = {"PEARLS": [10000], "BANANAS": [5000], "PINA_COLADAS": [15000], "COCONUTS": [8000]}
@@ -20,9 +17,8 @@ class Trader:
         Only method required. It takes all buy and sell orders for all symbols as an input,
         and outputs a list of orders to be sent
         """
-        # Initialize the method output dict as an empty dict and declare existence of global variable
+        # Initialize the method output dict as an empty dict
         result = {}
-        global lastMarketValues
 
         # set position limits
         positionLimits = {"PEARLS": 20, "BANANAS": 20, "COCONUTS": 600, "PINA_COLADAS": 300}
@@ -33,15 +29,18 @@ class Trader:
         
         currentValuations = getCurrentMarketPrices(state.market_trades)
         
-        for product in currentValuations.keys():#define rolling average for each product
-
-            if(len(Trader.past_100_valuations[product]) < 10):#if less than 100 trades took place
+        # define rolling average price for each product
+        for product in currentValuations.keys():
+            if(len(Trader.past_100_valuations[product]) < 10):
+                # less than 100 trades took place
                 Trader.past_100_valuations[product].append(currentValuations[product])
             else:
-                Trader.past_100_valuations[product] = np.roll(Trader.past_100_valuations[product], -1)#rotate and reassign 
-                Trader.past_100_valuations[product][-1] = currentValuations[product] 
-            
+                # rotate and reassign
+                Trader.past_100_valuations[product] = np.roll(Trader.past_100_valuations[product], -1)
+                Trader.past_100_valuations[product][-1] = currentValuations[product]            
             mean_price = np.mean(Trader.past_100_valuations[product])
+            if product == "PEARLS":
+                mean_price = 10000 # hard code to set pearl acceptable_price to 10000 as an exception
             Trader.rolling_average_trading_price[product] = mean_price
             print(product, ' mean price : ', mean_price)
         
@@ -68,7 +67,7 @@ class Trader:
                 # Sort all the available sell orders by their price,
                 # and select only the sell order with the lowest price
                 best_ask = min(order_depth.sell_orders.keys())
-                best_ask_volume = order_depth.sell_orders[best_ask]
+                best_ask_volume = -1*order_depth.sell_orders[best_ask]
 
                 # Check if the lowest ask (sell order) is lower than the above defined fair value
                 if best_ask < acceptable_buy_price:
@@ -79,10 +78,7 @@ class Trader:
                     else:
                         quantityToBuy = decideHowMuchToBuy(currentPosition, best_ask_volume, positionLimit, best_ask, acceptable_buy_price)
                     
-                    if quantityToBuy != 0:
-                        # update current position
-                        currentPosition += quantityToBuy
-                    
+                    if quantityToBuy != 0:                    
                         # We expect this order to trade with the sell order
                         print(product, "BUY", str(quantityToBuy) + "x", best_ask)
                         orders.append(Order(product, best_ask, quantityToBuy))
@@ -99,17 +95,12 @@ class Trader:
                         quantityToSell = decideHowMuchToSell(currentPosition, best_bid_volume, positionLimit, best_bid, acceptable_sell_price)
 
                     if quantityToSell != 0:
-                        # update current position
-                        currentPosition -= quantityToSell
-
                         print(product, "SELL", str(quantityToSell) + "x", best_bid)
                         orders.append(Order(product, best_bid, -quantityToSell))
 
             # Add all the above orders to the result dict
             result[product] = orders
-
-        # update market values
-        lastMarketValues = updateProductValuations(state.order_depths, lastMarketValues)
+            print("product:", product, "position:", state.position.get(product),"currentPosition:",currentPosition)
 
         # Return the dict of orders
         # These possibly contain buy or sell orders depending on the logic above
