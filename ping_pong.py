@@ -9,7 +9,7 @@ import numpy as np
 
 class Trader:
     
-    past_10_valuations = {"PEARLS": [10000], "BANANAS": [5000], "PINA_COLADAS": [15000], \
+    past_100_valuations = {"PEARLS": [10000], "BANANAS": [5000], "PINA_COLADAS": [15000], \
                            "COCONUTS": [8000], "DIVING_GEAR": [99000], "BERRIES": [3800], "DOLPHIN_SIGHTINGS": [0]}
     rolling_average_trading_price = {"PEARLS": 10000, "BANANAS": 5000, "PINA_COLADAS": 15000,\
                             "COCONUTS": 8000, "DIVING_GEAR": 99000, "BERRIES": 3800, "DOLPHIN_SIGHTINGS": 0}
@@ -18,7 +18,10 @@ class Trader:
 
     my_sell_price = {"PEARLS": 10000, "BANANAS": 5000, "PINA_COLADAS": 15000,\
                             "COCONUTS": 8000, "DIVING_GEAR": 99000, "BERRIES": 3800, "DOLPHIN_SIGHTINGS": 0}
-
+    
+    #dictionary for storing wether a product is rising None if stationary 
+    correlation_coefficient = {"PEARLS": 0, "BANANAS": 0, "PINA_COLADAS": 0, \
+                           "COCONUTS": 0, "DIVING_GEAR": 0, "BERRIES": 0, "DOLPHIN_SIGHTINGS": 0}
 
     def run(self, state: TradingState) -> Dict[str, List[Order]]:
         """
@@ -32,15 +35,13 @@ class Trader:
 
         # set position limits
         positionLimits = {"PEARLS": 20, "BANANAS": 20, "COCONUTS": 600, "PINA_COLADAS": 300,\
-            "DIVING_GEAR": 50, "BERRIES": 250, "DOLPHIN_SIGHTINGS": 0}
+            "DIVING_GEAR": 50, "BERRIES": 250, "DOLPHIN_SIGHTINGS": 1}
 
         # set safety margins for each product - a measure of how confident we can be in the valuation
         # smaller margin = more confident in valuation
         
-        # product_cost_margin = {"PEARLS": 10, "BANANAS": 2, "PINA_COLADAS": 8, \
-        #                         "COCONUTS": 5, "DIVING_GEAR": 25, "BERRIES": 3800, "DOLPHIN_SIGHTINGS": 3}
         product_cost_margin = {"PEARLS": 1, "BANANAS": 1, "PINA_COLADAS": 1, \
-                            "COCONUTS": 1, "DIVING_GEAR": 1, "BERRIES": 1, "DOLPHIN_SIGHTINGS": 1}
+                                "COCONUTS": 5, "DIVING_GEAR": 25, "BERRIES": 5, "DOLPHIN_SIGHTINGS": 3}
         
         currentValuations = getCurrentMarketPrices(state.market_trades)
         
@@ -71,18 +72,30 @@ class Trader:
                     Trader.my_buy_price[product] = currentValuations[product] + product_cost_margin[product]
 
         # define rolling average price for each product based on all market trades
+        #also define if product is rising of fallling. Corrleation coefficient is used as a measure of positive or negative slope 
         for product in currentValuations.keys():
-            if(len(Trader.past_10_valuations[product]) < 10):
+            if(len(Trader.past_100_valuations[product]) < 100):
                 # less than 100 trades took place
-                Trader.past_10_valuations[product].append(currentValuations[product])
+                Trader.past_100_valuations[product].append(currentValuations[product])
             else:
                 # rotate and reassign
-                Trader.past_10_valuations[product] = np.roll(Trader.past_10_valuations[product], -1)
-                Trader.past_10_valuations[product][-1] = currentValuations[product]            
-            mean_price = np.mean(Trader.past_10_valuations[product])
+                Trader.past_100_valuations[product] = np.roll(Trader.past_100_valuations[product], -1)
+                Trader.past_100_valuations[product][-1] = currentValuations[product]
+                            
+            #consider the past 10 trades for calculating the rolling average and correlation coefficient
+
+            if(len(Trader.past_100_valuations) >= 10):
+                mean_price = np.mean(Trader.past_100_valuations[product][-10:])
+                correlation_coefficient = np.corrcoeff(x = np.arrange(0, 10), y = Trader.past_100_valuations[product][-10:])
+            else:
+                mean_price = Trader.past_100_valuations[product][0]#default value
+                correlation_coefficient = 0
+
             if product == "PEARLS":
                 mean_price = 10000 # hard code to set pearl acceptable_price to 10000 as an exception
+
             Trader.rolling_average_trading_price[product] = mean_price
+            Trader.correlation_coefficient[product] = correlation_coefficient
         
         # Iterate over all the keys (the available products) contained in the order depths 
         for product in state.order_depths.keys():
@@ -95,27 +108,20 @@ class Trader:
 
             # estimate a fair value
             # can mess with this eg. by changing -safetymargins to +safetyMargins will making buying more likely
-            acceptable_buy_price = (Trader.rolling_average_trading_price[product] + Trader.my_buy_price[product])/2
-            acceptable_sell_price = (Trader.rolling_average_trading_price[product] + Trader.my_sell_price[product])/2
+            acceptable_buy_price = Trader.rolling_average_trading_price[product] - product_cost_margin[product]
+            acceptable_sell_price = Trader.rolling_average_trading_price[product] + product_cost_margin[product]
 
             # get current position and position limit on the product
             currentPosition = state.position.get(product, 0) # set to 0 if nothing returned
             positionLimit = positionLimits[product]
 
-            # if product == "BERRIES":
-            #     if 200000 < state.timestamp < 300000:
-            #         acceptable_buy_price = 100000 # encourage trader to buy as much as possible
-            #         acceptable_sell_price = 100000 # discourage trader from selling
-            #     elif 475000 < state.timestamp < 525000:
-            #         acceptable_buy_price = 1 # discourage buying at peak
-            #         acceptable_sell_price = 1 # encourage selling at peak
-            #     elif 800000 < state.timestamp < 900000:
-            #         acceptable_buy_price += 500 # encourage buying somewhat
-            #         acceptable_sell_price += 500 # discourage selling somewhat
-            # elif product == "DOLPHIN_SIGHTINGS":
-
-                # # TODO: CHECK FOR A JUMP IN DOLPHIN SIGHTINGS, BUY DIVING_GEAR IF RELEVANT
-                # print(state.observations.get(product, 0))
+            if product == "BERRIES":
+                if state.timestamp < 30000:
+                    acceptable_buy_price = 100000 # encourage trader to buy as much as possible
+                    acceptable_sell_price = 100000 # discourage trader from selling
+                elif 47500 < state.timestamp < 52500:
+                    acceptable_buy_price = 1 # discourage buying at peak
+                    acceptable_sell_price = 1 # encourage selling at peak
 
             # If statement checks if there are any SELL orders in the market
             if len(order_depth.sell_orders) > 0:
@@ -126,7 +132,7 @@ class Trader:
                 best_ask_volume = -1*order_depth.sell_orders[best_ask]
 
                 # Check if the lowest ask (sell order) is lower than the above defined fair value
-                if best_ask < acceptable_buy_price:
+                if best_ask < acceptable_buy_price and Trader.correlation_coefficient[product] >= 0: #also check that the porduct price is rising
 
                     # decide how much to buy
                     if product == "PEARLS":
@@ -140,11 +146,11 @@ class Trader:
                         orders.append(Order(product, best_ask, quantityToBuy))
 
 
-            # The below code block looks for opportunities to sell at a premium
+            # Tuhe below code block looks for opportunities to sell at a premim 
             if len(order_depth.buy_orders) != 0:
                 best_bid = max(order_depth.buy_orders.keys())
                 best_bid_volume = order_depth.buy_orders[best_bid]
-                if best_bid > acceptable_sell_price:
+                if best_bid > acceptable_sell_price and Trader.correlation_coefficient[product] <= 0:
                     if product == "PEARLS":
                         quantityToSell = decideHowMuchCanBeSold(currentPosition, best_bid_volume, positionLimit)
                     else:
@@ -261,6 +267,6 @@ def getCurrentMarketPrices(market_trades):
         try:
             predicted_prices[product] = transaction_totals/quantity_traded
         except:
-            predicted_prices[product] = Trader.past_10_valuations[product][0]#default value
+            predicted_prices[product] = Trader.past_100_valuations[product][0]#default value
 
     return predicted_prices
