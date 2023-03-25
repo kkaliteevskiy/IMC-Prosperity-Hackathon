@@ -9,8 +9,10 @@ import numpy as np
 
 class Trader:
     
-    past_100_valuations = {"PEARLS": [10000], "BANANAS": [5000], "PINA_COLADAS": [15000], "COCONUTS": [8000]}
-    rolling_average_trading_price = {"PEARLS": 10000, "BANANAS": 5000, "PINA_COLADAS": 15000, "COCONUTS": 8000}
+    past_100_valuations = {"PEARLS": [10000], "BANANAS": [5000], "PINA_COLADAS": [15000], \
+                           "COCONUTS": [8000], "DIVING_GEAR": [99000], "BERRIES": [3800], "DOLPHIN_SIGHTINGS": [0]}
+    rolling_average_trading_price = {"PEARLS": 10000, "BANANAS": 5000, "PINA_COLADAS": 15000,\
+                            "COCONUTS": 8000, "DIVING_GEAR": 99000, "BERRIES": 3800, "DOLPHIN_SIGHTINGS": 0}
 
     def run(self, state: TradingState) -> Dict[str, List[Order]]:
         """
@@ -21,11 +23,13 @@ class Trader:
         result = {}
 
         # set position limits
-        positionLimits = {"PEARLS": 20, "BANANAS": 20, "COCONUTS": 600, "PINA_COLADAS": 300}
+        positionLimits = {"PEARLS": 20, "BANANAS": 20, "COCONUTS": 600, "PINA_COLADAS": 300,\
+            "DIVING_GEAR": 50, "BERRIES": 250, "DOLPHIN_SIGHTINGS": 0}
 
         # set safety margins for each product - a measure of how confident we can be in the valuation
         # smaller margin = more confident in valuation
-        safetyMargins = {"PEARLS": 0, "BANANAS": 0, "COCONUTS": 0, "PINA_COLADAS": 0} 
+        safetyMargins = {"PEARLS": 0, "BANANAS": 0, "COCONUTS": 0, "PINA_COLADAS": 0,\
+            "DIVING_GEAR": 0, "BERRIES": 0, "DOLPHIN_SIGHTINGS": 0} 
         
         currentValuations = getCurrentMarketPrices(state.market_trades)
         
@@ -42,7 +46,6 @@ class Trader:
             if product == "PEARLS":
                 mean_price = 10000 # hard code to set pearl acceptable_price to 10000 as an exception
             Trader.rolling_average_trading_price[product] = mean_price
-            print(product, ' mean price : ', mean_price)
         
         # Iterate over all the keys (the available products) contained in the order depths
         for product in state.order_depths.keys():
@@ -54,12 +57,28 @@ class Trader:
             orders: list[Order] = []
 
             # estimate a fair value
+            # can mess with this eg. by changing -safetymargins to +safetyMargins will making buying more likely
             acceptable_buy_price = Trader.rolling_average_trading_price[product] - safetyMargins[product]
             acceptable_sell_price = Trader.rolling_average_trading_price[product] + safetyMargins[product]
 
             # get current position and position limit on the product
             currentPosition = state.position.get(product, 0) # set to 0 if nothing returned
             positionLimit = positionLimits[product]
+
+            if product == "BERRIES":
+                if 200000 < state.timestamp < 300000:
+                    acceptable_buy_price = 100000 # encourage trader to buy as much as possible
+                    acceptable_sell_price = 100000 # discourage trader from selling
+                elif 475000 < state.timestamp < 525000:
+                    acceptable_buy_price = 1 # discourage buying at peak
+                    acceptable_sell_price = 1 # encourage selling at peak
+                elif 800000 < state.timestamp < 900000:
+                    acceptable_buy_price += 500 # encourage buying somewhat
+                    acceptable_sell_price += 500 # discourage selling somewhat
+            elif product == "DOLPHIN_SIGHTINGS":
+
+                # TODO: CHECK FOR A JUMP IN DOLPHIN SIGHTINGS, BUY DIVING_GEAR IF RELEVANT
+                print(state.observations.get(product, 0))
 
             # If statement checks if there are any SELL orders in the market
             if len(order_depth.sell_orders) > 0:
@@ -100,7 +119,6 @@ class Trader:
 
             # Add all the above orders to the result dict
             result[product] = orders
-            print("product:", product, "position:", state.position.get(product),"currentPosition:",currentPosition)
 
         # Return the dict of orders
         # These possibly contain buy or sell orders depending on the logic above

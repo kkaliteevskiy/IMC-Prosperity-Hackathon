@@ -79,7 +79,7 @@ def simulate(round: int, day: int, trader):
             state.listings[product] = listing[product]
             state.order_depths[product] = depth[product]
 
-        positionLimits = {"PEARLS": 20, "BANANAS": 20, "COCONUTS": 600, "PINA_COLADAS": 300}
+        positionLimits = {"PEARLS": 20, "BANANAS": 20, "COCONUTS": 600, "PINA_COLADAS": 300, "DIVING_GEAR": 50, "BERRIES": 250, "DOLPHIN_SIGHTINGS": 0}
         for product in position:
             if abs(position[product]) > positionLimits[product]:
                 print(f"Position limit for {product} violated - {position[product]}")
@@ -93,4 +93,4 @@ def simulate(round: int, day: int, trader):
 
 from trade import Trader
 if __name__ == '__main__':
-    simulate(round=2, day=1, trader=Trader())
+    simulate(round=3, day=0, trader=Trader())

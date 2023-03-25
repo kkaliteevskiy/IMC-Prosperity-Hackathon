@@ -2,9 +2,9 @@ import pandas as pd
 import plotly.express as px  
 
 # VARIABLES TO CHANGE:
-round = 2
-available_days = [-1,0,1]
-product_to_plot = 'PINA_COLADAS'
+round = 3
+available_days = [0,1,2]
+product_to_plot = 'DIVING_GEAR'
 n = 10 # for an n-point rolling avg - see later
 
 
