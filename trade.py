@@ -9,14 +9,50 @@ import numpy as np
 
 class Trader:
     
-    past_100_valuations = {"PEARLS": [10000], "BANANAS": [5000], "PINA_COLADAS": [15000], \
-                           "COCONUTS": [8000], "DIVING_GEAR": [99000], "BERRIES": [3800], "DOLPHIN_SIGHTINGS": [0],\
-                            "BAGUETTE": [0], "DIP": [0], "UKULELE": [0], "PICNIC_BASKET": [0]}
-    rolling_average_trading_price = {"PEARLS": 10000, "BANANAS": 5000, "PINA_COLADAS": 15000,\
-                            "COCONUTS": 8000, "DIVING_GEAR": 99000, "BERRIES": 3800, "DOLPHIN_SIGHTINGS": 0,\
-                            "BAGUETTE": 0, "DIP": 0, "UKULELE": 0, "PICNIC_BASKET": 0}
+    past_10_valuations = { 
+        "PEARLS": [10000],
+        "BANANAS": [5000],
+        "PINA_COLADAS": [15000],
+        "COCONUTS": [8000],
+        "DIVING_GEAR": [99000],
+        "BERRIES": [3800],
+        "DOLPHIN_SIGHTINGS": [0],
+        "BAGUETTE": [12200],
+        "DIP": [7100],
+        "UKULELE": [21000],
+        "PICNIC_BASKET": [74000]
+        }
+    rolling_average_trading_price = {
+        "PEARLS": 10000,
+        "BANANAS": 5000,
+        "PINA_COLADAS": 15000,
+        "COCONUTS": 8000,
+        "DIVING_GEAR": 99000,
+        "BERRIES": 3800,
+        "DOLPHIN_SIGHTINGS": 0,
+        "BAGUETTE": 12000,
+        "DIP": 7000,
+        "UKULELE": 20400,
+        "PICNIC_BASKET": 74000
+        }
     last_dolphin_sighting = 0
     diving_gear_start_time = -100000 # initialise to negatively large number
+    picnic_components = ["DIP", "UKULELE", "BAGUETTE"]
+    picnic_basket_differential = 0
+    correlation_coefficients = {
+        "PEARLS": 0,
+        "BANANAS": 0,
+        "PINA_COLADAS": 0,
+        "COCONUTS": 0,
+        "DIVING_GEAR": 0,
+        "BERRIES": 0,
+        "DOLPHIN_SIGHTINGS": 0,
+        "BAGUETTE": 0,
+        "DIP": 0,
+        "UKULELE": 0,
+        "PICNIC_BASKET": 0
+    }
+    correlations_to_set = ["BERRIES", "DIVING_GEAR", "PINA_COLADAS", "COCONUTS", "BANANAS"]
 
     def run(self, state: TradingState) -> Dict[str, List[Order]]:
         """
@@ -29,7 +65,7 @@ class Trader:
         # set position limits
         positionLimits = {"PEARLS": 20, "BANANAS": 20, "COCONUTS": 600, "PINA_COLADAS": 300,\
             "DIVING_GEAR": 50, "BERRIES": 250, "DOLPHIN_SIGHTINGS": 0,\
-            "BAGUETTE": 0, "DIP": 0, "UKULELE": 0, "PICNIC_BASKET": 0}
+            "BAGUETTE": 150, "DIP": 300, "UKULELE": 70, "PICNIC_BASKET": 70}
 
         # set safety margins for each product - a measure of how confident we can be in the valuation
         # smaller margin = more confident in valuation
@@ -41,16 +77,27 @@ class Trader:
         
         # define rolling average price for each product
         for product in currentValuations.keys():
-            if(len(Trader.past_100_valuations[product]) < 10):
+            if(len(Trader.past_10_valuations[product]) < 10):
                 # less than 100 trades took place
-                Trader.past_100_valuations[product].append(currentValuations[product])
+                Trader.past_10_valuations[product].append(currentValuations[product])
             else:
                 # rotate and reassign
-                Trader.past_100_valuations[product] = np.roll(Trader.past_100_valuations[product], -1)
-                Trader.past_100_valuations[product][-1] = currentValuations[product]            
-            mean_price = np.mean(Trader.past_100_valuations[product])
+                Trader.past_10_valuations[product] = np.roll(Trader.past_10_valuations[product], -1)
+                Trader.past_10_valuations[product][-1] = currentValuations[product]            
+            mean_price = np.mean(Trader.past_10_valuations[product])
+            # set correlation coefficients - only for some of the products - otherwise will remain 0
+            if product in Trader.correlations_to_set:
+                correlation_coeff = np.corrcoef(x=np.arange(0,len(Trader.past_10_valuations[product])), y=Trader.past_10_valuations[product])[0][1]
+                Trader.correlation_coefficients[product] = correlation_coeff
+            # special action for certain products
             if product == "PEARLS":
                 mean_price = 10000 # hard code to set pearl acceptable_price to 10000 as an exception
+            elif product == "PICNIC_BASKET":
+                Trader.picnic_basket_differential = calculateBasketVsCombined()
+                mean_price -= Trader.picnic_basket_differential / 2
+            elif product in Trader.picnic_components: # dip, baguette or ukulele
+                mean_price += Trader.picnic_basket_differential / 2
+                
             Trader.rolling_average_trading_price[product] = mean_price
         
         # Iterate over all the keys (the available products) contained in the order depths
@@ -98,16 +145,16 @@ class Trader:
                     acceptable_buy_price = diving_gear_price
                     acceptable_sell_price = 3*diving_gear_price # basically stop sales completely
 
+
             # If statement checks if there are any SELL orders in the market
             if len(order_depth.sell_orders) > 0:
-
                 # Sort all the available sell orders by their price,
                 # and select only the sell order with the lowest price
                 best_ask = min(order_depth.sell_orders.keys())
                 best_ask_volume = -1*order_depth.sell_orders[best_ask]
-
                 # Check if the lowest ask (sell order) is lower than the above defined fair value
-                if best_ask < acceptable_buy_price:
+                # and that product price is rising
+                if best_ask < acceptable_buy_price and Trader.correlation_coefficients[product] >= 0:
 
                     # decide how much to buy
                     if product == "PEARLS":
@@ -120,12 +167,11 @@ class Trader:
                         print(product, "BUY", str(quantityToBuy) + "x", best_ask)
                         orders.append(Order(product, best_ask, quantityToBuy))
 
-
             # The below code block looks for opportunities to sell at a premium
             if len(order_depth.buy_orders) != 0:
                 best_bid = max(order_depth.buy_orders.keys())
                 best_bid_volume = order_depth.buy_orders[best_bid]
-                if best_bid > acceptable_sell_price:
+                if best_bid > acceptable_sell_price and Trader.correlation_coefficients[product] <= 0:
                     if product == "PEARLS":
                         quantityToSell = decideHowMuchCanBeSold(currentPosition, best_bid_volume, positionLimit)
                     else:
@@ -241,6 +287,14 @@ def getCurrentMarketPrices(market_trades):
         try:
             predicted_prices[product] = transaction_totals/quantity_traded
         except:
-            predicted_prices[product] = Trader.past_100_valuations[product][0]#default value
+            predicted_prices[product] = Trader.past_10_valuations[product][0]#default value
 
     return predicted_prices
+
+def calculateBasketVsCombined():
+    basketPrice = np.mean(Trader.past_10_valuations["PICNIC_BASKET"])
+    dipPrice = np.mean(Trader.past_10_valuations["DIP"])
+    ukulelePrice = np.mean(Trader.past_10_valuations["UKULELE"])
+    baguettePrice = np.mean(Trader.past_10_valuations["BAGUETTE"])
+    combinedPrice = 2 * baguettePrice + 4 * dipPrice + ukulelePrice
+    return (basketPrice - combinedPrice)
