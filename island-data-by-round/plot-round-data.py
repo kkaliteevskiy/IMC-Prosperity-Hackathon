@@ -25,7 +25,7 @@ df_3['timestamp'] = df_3['timestamp'] + final_timestamp_day_0
 df = pd.concat([df_1, df_2, df_3])
 
 # plot price history
-fig = px.line(df, x = 'timestamp', y = 'mid_price', color = 'product')
+fig = px.line(df, x = 'timestamp', y = 'mid_price', color = 'product', title=f'price history for round {round}, days {available_days}')
 fig.show(renderer="browser")
 
 # restrict dataframe to one product only and calculate n point rolling average

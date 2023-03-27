@@ -15,6 +15,8 @@ class Trader:
     rolling_average_trading_price = {"PEARLS": 10000, "BANANAS": 5000, "PINA_COLADAS": 15000,\
                             "COCONUTS": 8000, "DIVING_GEAR": 99000, "BERRIES": 3800, "DOLPHIN_SIGHTINGS": 0,\
                             "BAGUETTE": 0, "DIP": 0, "UKULELE": 0, "PICNIC_BASKET": 0}
+    last_dolphin_sighting = 0
+    diving_gear_start_time = -100000 # initialise to negatively large number
 
     def run(self, state: TradingState) -> Dict[str, List[Order]]:
         """
@@ -79,10 +81,22 @@ class Trader:
                 elif 800000 < state.timestamp < 900000:
                     acceptable_buy_price += 500 # encourage buying somewhat
                     acceptable_sell_price += 500 # discourage selling somewhat
-            elif product == "DOLPHIN_SIGHTINGS":
-
-                # TODO: CHECK FOR A JUMP IN DOLPHIN SIGHTINGS, BUY DIVING_GEAR IF RELEVANT
-                print(state.observations.get(product, 0))
+            elif product == "DIVING_GEAR":
+                # check for a jump in dolphin sightings, encourage purchase of diving gear if relevant
+                current_dolphin_sightings = state.observations['DOLPHIN_SIGHTINGS']
+                if state.timestamp < 100:
+                    # not enough data yet
+                    Trader.last_dolphin_sighting = current_dolphin_sightings
+                elif current_dolphin_sightings - Trader.last_dolphin_sighting > 2:
+                    # jump in dolphin sightings, project price of diving gear to rise soon
+                    diving_gear_price = acceptable_buy_price + 1000
+                    Trader.diving_gear_start_time = state.timestamp
+                
+                # check if we are still in the projected rise zone for diving gear which follows a jump in dolphin sightings
+                if state.timestamp - Trader.diving_gear_start_time <= 70000:
+                    # assume price will rise up to the fixed value diving_gear_price
+                    acceptable_buy_price = diving_gear_price
+                    acceptable_sell_price = 3*diving_gear_price # basically stop sales completely
 
             # If statement checks if there are any SELL orders in the market
             if len(order_depth.sell_orders) > 0:
@@ -147,14 +161,14 @@ def decideHowMuchCanBeBought(currentPos, maxPossibleVolume, posLimit):
 def decideHowMuchToBuy(currentPos, maxPossibleVolume, posLimit, buyingPrice, estimatedValue):
     maxAmount = decideHowMuchCanBeBought(currentPos, maxPossibleVolume, posLimit)
     # calculate a weighted score, based on how close the purchase price is to the estimated value
-    # this will range from 0 (buyingPrice == estimatedValue) to 1 (buyingPrice==0)
-    weight = abs(estimatedValue - buyingPrice)/estimatedValue
+    # this will range from 0 (buyingPrice == estimatedValue) to estimatedValue (buyingPrice==0)
+    weight = abs(estimatedValue - buyingPrice)
     
     # now we want to bias towards results with a weight close to 1,
     # ie. where the price is very good compare to the estimated value
     # here we use a sigmoid function as an activation function to do this
     # the output of the function is also a weight ranging from 0 to 1
-    activation = sigmoid(5*weight) + 0.00669285
+    activation = sigmoid(0.4*weight)
     quantityToBuy = round(maxAmount * weight * activation)
     return quantityToBuy
 
@@ -171,8 +185,7 @@ def decideHowMuchToSell(currentPos, maxPossibleVolume, posLimit, sellingPrice, e
     """analogous to decideHowMuchToBuy() - see that function for explanation"""
     maxAmount = decideHowMuchCanBeSold(currentPos, maxPossibleVolume, posLimit)
     weight = abs(sellingPrice - estimatedValue)
-    #activation = sigmoid(5*(weight+0.3))
-    activation = sigmoid(weight) # need slightly different activation as weight is different
+    activation = sigmoid(0.4*weight)
     quantityToSell = round(maxAmount * activation)
     return quantityToSell
 
