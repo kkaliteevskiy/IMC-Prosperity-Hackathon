@@ -10,9 +10,11 @@ import numpy as np
 class Trader:
     
     past_100_valuations = {"PEARLS": [10000], "BANANAS": [5000], "PINA_COLADAS": [15000], \
-                           "COCONUTS": [8000], "DIVING_GEAR": [99000], "BERRIES": [3800], "DOLPHIN_SIGHTINGS": [0]}
+                           "COCONUTS": [8000], "DIVING_GEAR": [99000], "BERRIES": [3800], "DOLPHIN_SIGHTINGS": [0],\
+                            "BAGUETTE": [0], "DIP": [0], "UKULELE": [0], "PICNIC_BASKET": [0]}
     rolling_average_trading_price = {"PEARLS": 10000, "BANANAS": 5000, "PINA_COLADAS": 15000,\
-                            "COCONUTS": 8000, "DIVING_GEAR": 99000, "BERRIES": 3800, "DOLPHIN_SIGHTINGS": 0}
+                            "COCONUTS": 8000, "DIVING_GEAR": 99000, "BERRIES": 3800, "DOLPHIN_SIGHTINGS": 0,\
+                            "BAGUETTE": 0, "DIP": 0, "UKULELE": 0, "PICNIC_BASKET": 0}
 
     def run(self, state: TradingState) -> Dict[str, List[Order]]:
         """
@@ -24,12 +26,14 @@ class Trader:
 
         # set position limits
         positionLimits = {"PEARLS": 20, "BANANAS": 20, "COCONUTS": 600, "PINA_COLADAS": 300,\
-            "DIVING_GEAR": 50, "BERRIES": 250, "DOLPHIN_SIGHTINGS": 0}
+            "DIVING_GEAR": 50, "BERRIES": 250, "DOLPHIN_SIGHTINGS": 0,\
+            "BAGUETTE": 0, "DIP": 0, "UKULELE": 0, "PICNIC_BASKET": 0}
 
         # set safety margins for each product - a measure of how confident we can be in the valuation
         # smaller margin = more confident in valuation
         safetyMargins = {"PEARLS": 0, "BANANAS": 0, "COCONUTS": 0, "PINA_COLADAS": 0,\
-            "DIVING_GEAR": 0, "BERRIES": 0, "DOLPHIN_SIGHTINGS": 0} 
+            "DIVING_GEAR": 0, "BERRIES": 0, "DOLPHIN_SIGHTINGS": 0,\
+            "BAGUETTE": 0, "DIP": 0, "UKULELE": 0, "PICNIC_BASKET": 0} 
         
         currentValuations = getCurrentMarketPrices(state.market_trades)
         
